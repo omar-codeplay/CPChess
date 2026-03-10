@@ -1320,6 +1320,8 @@
     let openingsDB = {};     // fen-pieces → opening name
     let explorationFen = null; // temp FEN when user drags piece (doesn't affect game record)
     let liveAnalyseTimer = null; // debounce timer for engine
+    let pendingLiveFen = null;   // queued FEN waiting for engine to finish
+    let engineBusy = false;      // true while engine is computing live analysis
 
     // Consistent analysis settings
     const ANALYSIS_DEPTH = 16;
@@ -1736,14 +1738,26 @@
 
       if (line.startsWith('bestmove')) {
         if (liveBestCb) {
+          // ── Full analysis mode ─────────────────────────────────────
+          engineBusy = false;
           const cb = liveBestCb; liveBestCb = null;
           const r1 = liveMPV[1] || null;
           const r2 = liveMPV[2] || null;
           liveMPV = {};
           cb(r1, r2);
         } else {
+          // ── Live mode ──────────────────────────────────────────────
+          engineBusy = false;
           renderLiveEngine();
-          $('#edpt').text('depth ' + (liveMPV[1]?.depth || ANALYSIS_DEPTH) + ' · ready');
+          const finalDepth = liveMPV[1]?.depth || ANALYSIS_DEPTH;
+          $('#edpt').text('depth ' + finalDepth + ' · ready');
+
+          // If user navigated while engine was computing, fire the queued position
+          if (pendingLiveFen && engineOn && !isAnalyzing) {
+            const fen = pendingLiveFen;
+            pendingLiveFen = null;
+            setTimeout(() => _fireLiveAnalyse(fen), 30);
+          }
         }
       }
     }
@@ -1753,33 +1767,59 @@
       return m ? parseInt(m[1], 10) : null;
     }
 
+    // ── LIVE ANALYSIS ENGINE CONTROL ─────────────────────────────────
+    // Design: stop immediately on every call, queue the target FEN.
+    // _fireLiveAnalyse is only called when engine has confirmed it stopped
+    // (i.e. when bestmove arrives or engine was already idle).
+
     function liveAnalyse() {
-      if (!engineReady || !engineOn) return;
+      if (!engineReady || !engineOn || isAnalyzing) return;
       clearTimeout(liveAnalyseTimer);
+      const fen = explorationFen || game.fen();
+
+      if (engineBusy) {
+        // Engine is mid-calculation — queue the new FEN and stop immediately.
+        // bestmove handler will pick up pendingLiveFen.
+        pendingLiveFen = fen;
+        sfPost('stop');
+        $('#edpt').text('stopping…');
+        return;
+      }
+
+      // Engine is idle — debounce briefly then fire
+      pendingLiveFen = null;
       liveAnalyseTimer = setTimeout(() => {
         if (!engineReady || !engineOn || liveBestCb || isAnalyzing) return;
-        const fen = explorationFen || game.fen();
-        const bookMove = getOpeningMove(fen);
-        liveMPV = {};
-        liveFen = fen;
-        sfPost('stop');
-        sfPost('setoption name MultiPV value ' + ANALYSIS_MULTIPV);
-        sfPost('position fen ' + liveFen);
-        sfPost('go depth ' + ANALYSIS_DEPTH);
-        $('#edpt').text('analyzing…');
-        if (bookMove) {
-          const bookSAN = uciToSAN(bookMove, fen);
-          $('#bsan').text('📖 ' + bookSAN);
-          $('#eval-l').text('Opening book move');
-        }
-      }, 120);
+        _fireLiveAnalyse(fen);
+      }, 80);
+    }
+
+    function _fireLiveAnalyse(fen) {
+      pendingLiveFen = null;
+      engineBusy = true;
+      liveMPV = {};
+      liveFen = fen;
+      sfPost('stop');                                          // safety stop
+      sfPost('setoption name MultiPV value ' + ANALYSIS_MULTIPV);
+      sfPost('position fen ' + liveFen);
+      sfPost('go depth ' + ANALYSIS_DEPTH);
+      $('#edpt').text('analyzing…');
+      const bookMove = getOpeningMove(fen);
+      if (bookMove) {
+        $('#bsan').text('📖 ' + uciToSAN(bookMove, fen));
+        $('#eval-l').text('Opening book move');
+      }
     }
 
     function evalPosition(fen, depth) {
       return new Promise(resolve => {
+        engineBusy = true;
         liveMPV = {};
         liveFen = fen;
-        liveBestCb = (best, second) => resolve({ best, second });
+        liveBestCb = (best, second) => {
+          engineBusy = false;
+          resolve({ best, second });
+        };
         sfPost('stop');
         sfPost('setoption name MultiPV value 2');
         sfPost('position fen ' + fen);
@@ -1952,6 +1992,8 @@
       // ── Force engine back to live mode ─────────────────────────────
       liveBestCb = null;         // clear any lingering callback
       liveMPV = {};
+      engineBusy = false;
+      pendingLiveFen = null;
       isAnalyzing = false;
       sfPost('setoption name MultiPV value ' + ANALYSIS_MULTIPV);
 
