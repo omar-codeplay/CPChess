@@ -918,6 +918,148 @@
     .square-55d63 {
       position: relative;
     }
+
+    /* ── MOBILE RESPONSIVE ───────────────────────────────────────────── */
+    @media (max-width: 900px) {
+      .grid {
+        grid-template-columns: 1fr;
+        padding: 8px 10px 16px;
+        gap: 8px;
+      }
+
+      /* Hide left panel on mobile, show inline */
+      .left {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+
+      /* Player panel spans full width */
+      .left > .panel:first-child {
+        grid-column: 1 / -1;
+      }
+
+      /* Accuracy panel spans full width */
+      #acc-panel {
+        grid-column: 1 / -1;
+      }
+
+      .center {
+        order: -1; /* board first on mobile */
+      }
+
+      .right {
+        order: 2;
+      }
+
+      #myBoard {
+        max-width: 100%;
+      }
+
+      .ctrls {
+        flex-wrap: wrap;
+        gap: 4px;
+      }
+
+      .fin {
+        min-width: 0;
+        flex: 1 1 120px;
+      }
+
+      .btn-az, .btn-load {
+        flex: 1 1 auto;
+      }
+
+      .sbar {
+        padding: 7px 10px;
+      }
+
+      .board-row {
+        gap: 6px;
+      }
+
+      .ebar {
+        width: 10px;
+      }
+
+      .mlw {
+        max-height: 200px;
+      }
+
+      /* Stats grid: 4 per row on mobile */
+      .stats-split {
+        gap: 6px;
+        padding: 0 10px 10px;
+      }
+
+      .stats-grid {
+        grid-template-columns: repeat(4, 1fr);
+      }
+
+      .stat-val {
+        font-size: 14px;
+      }
+
+      /* Nav bar */
+      nav {
+        padding: 0 12px;
+      }
+
+      .logo {
+        font-size: 17px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .left {
+        grid-template-columns: 1fr;
+      }
+
+      #acc-panel {
+        grid-column: auto;
+      }
+
+      .cb {
+        width: 30px;
+        height: 30px;
+        font-size: 13px;
+      }
+
+      .stats-grid {
+        grid-template-columns: repeat(4, 1fr);
+      }
+
+      .acc-n {
+        font-size: 20px;
+      }
+
+      .pbox {
+        height: 100px;
+        font-size: 10px;
+      }
+
+      /* Engine panel */
+      #sf-lines {
+        font-size: 10px;
+      }
+    }
+
+    /* Touch-friendly: larger tap targets */
+    @media (hover: none) {
+      .cb {
+        min-width: 36px;
+        min-height: 36px;
+      }
+
+      .mi {
+        padding: 6px 8px;
+        font-size: 13px;
+      }
+
+      .tab {
+        padding: 10px 7px;
+      }
+    }
   </style>
 </head>
 
@@ -1198,6 +1340,8 @@
     let fullHistory = [];
     let currentIdx = 0;
     let openingsDB = {};     // fen-pieces → opening name
+    let explorationFen = null; // temp FEN when user drags piece (doesn't affect game record)
+    let liveAnalyseTimer = null; // debounce timer for engine
 
     // Consistent analysis settings
     const ANALYSIS_DEPTH = 16;
@@ -1254,8 +1398,19 @@
       } catch (e) { console.warn('openings.json not loaded'); }
     }
 
+    function getOpeningEntry(fen) {
+      const val = openingsDB[fen.split(' ')[0]];
+      if (!val) return null;
+      if (typeof val === 'string') return { name: val, move: null };
+      return val; // supports { name, move } format
+    }
     function getOpeningName(fen) {
-      return openingsDB[fen.split(' ')[0]] || null;
+      const e = getOpeningEntry(fen);
+      return e ? e.name : null;
+    }
+    function getOpeningMove(fen) {
+      const e = getOpeningEntry(fen);
+      return (e && e.move) ? e.move : null;
     }
 
     // ── EVAL OBJECTS ─────────────────────────────────────────────────
@@ -1604,13 +1759,26 @@
     }
 
     function liveAnalyse() {
-      if (!engineReady || !engineOn || liveBestCb || isAnalyzing) return;
-      liveMPV = {};
-      liveFen = game.fen();
-      sfPost('stop');
-      sfPost('setoption name MultiPV value ' + ANALYSIS_MULTIPV);
-      sfPost('position fen ' + liveFen);
-      sfPost('go depth ' + ANALYSIS_DEPTH);
+      if (!engineReady || !engineOn) return;
+      clearTimeout(liveAnalyseTimer);
+      liveAnalyseTimer = setTimeout(() => {
+        if (!engineReady || !engineOn || liveBestCb || isAnalyzing) return;
+        const fen = explorationFen || game.fen();
+        // Check opening book first
+        const bookMove = getOpeningMove(fen);
+        liveMPV = {};
+        liveFen = fen;
+        sfPost('stop');
+        sfPost('setoption name MultiPV value ' + ANALYSIS_MULTIPV);
+        sfPost('position fen ' + liveFen);
+        sfPost('go depth ' + ANALYSIS_DEPTH);
+        // If book move exists, show it immediately as hint
+        if (bookMove) {
+          const bookSAN = uciToSAN(bookMove, fen);
+          $('#bsan').text('📖 ' + bookSAN);
+          $('#eval-l').text('Opening book move');
+        }
+      }, 120);
     }
 
     function evalPosition(fen, depth) {
@@ -1673,13 +1841,18 @@
       const topLabel = cp < 0 ? evalStr : '';
       $('#ebot').text(label); $('#etop').text(topLabel);
 
-      // Best move
-      const bestUCI = (best.pv || '').split(' ')[0];
+      // Check opening book for this position
+      const currentFen = liveFen || game.fen();
+      const bookMove = getOpeningMove(currentFen);
+      const openName = getOpeningName(currentFen);
+
+      // Best move — prefer book move if available
+      const bestUCI = bookMove || (best.pv || '').split(' ')[0];
       const evLabel = best.mate !== null && best.mate !== undefined
         ? (Math.abs(best.mate) === 0 ? 'Checkmate' : (best.mate > 0 ? 'White mates in ' + Math.abs(best.mate) : 'Black mates in ' + Math.abs(best.mate)))
         : (cp > 300 ? 'White is winning' : cp > 60 ? 'White is better' : cp > -60 ? 'Equal position' : cp > -300 ? 'Black is better' : 'Black is winning');
-      $('#eval-l').text(evLabel);
-      $('#bsan').text(uciToSAN(bestUCI, liveFen));
+      $('#eval-l').text(openName ? '📖 ' + openName : evLabel);
+      $('#bsan').text((bookMove ? '📖 ' : '') + uciToSAN(bestUCI, currentFen));
       $('#bev').text(evalStr);
       $('#eval-n').text(evalStr).attr('class', 'ebn ' + (cp >= 0 ? 'pos' : 'neg'));
 
@@ -1687,13 +1860,22 @@
       const lc = document.getElementById('sf-lines');
       if (!lc) return;
       lc.innerHTML = '';
+
+      // If book move, show it as first line
+      if (bookMove) {
+        const d = document.createElement('div');
+        d.className = 'eline top';
+        d.innerHTML = `<span class="lnum">📖</span><span class="lev pos">Book</span><span class="lmv">${uciToSAN(bookMove, currentFen)}</span>`;
+        lc.appendChild(d);
+      }
+
       keys.forEach((k, i) => {
         const ln = liveMPV[k];
         const evStr = fmtEval(ln);
         const isPos = ln.cp >= 0;
         const d = document.createElement('div');
-        d.className = 'eline' + (i === 0 ? ' top' : '');
-        d.innerHTML = `<span class="lnum">${i + 1}</span><span class="lev ${isPos ? 'pos' : 'neg'}">${evStr}</span><span class="lmv">${pvToSAN(ln.pv, liveFen) || '—'}</span>`;
+        d.className = 'eline' + (i === 0 && !bookMove ? ' top' : '');
+        d.innerHTML = `<span class="lnum">${i + 1}</span><span class="lev ${isPos ? 'pos' : 'neg'}">${evStr}</span><span class="lmv">${pvToSAN(ln.pv, currentFen) || '—'}</span>`;
         lc.appendChild(d);
       });
 
@@ -1715,6 +1897,8 @@
       btn.textContent = '⏳ Analyzing…'; btn.disabled = true;
       document.getElementById('az-wrap').style.display = '';
       sfPost('stop');
+      sfPost('ucinewgame'); // ← clear hash table for consistent results
+      await new Promise(r => setTimeout(r, 80)); // brief pause for ucinewgame to apply
 
       // Build FEN sequence
       const positions = [];
@@ -1865,22 +2049,30 @@
 
     function onDrop(src, tgt) {
       clearHighlights();
-      const mv = game.move({ from: src, to: tgt, promotion: 'q' });
+      // Build a temporary game from the current board position only
+      const tmpGame = new Chess(game.fen());
+      const mv = tmpGame.move({ from: src, to: tgt, promotion: 'q' });
       if (!mv) return 'snapback';
-      fullHistory = game.history({ verbose: true });
-      currentIdx = fullHistory.length;
-      analysisData = [];
-      updateUI();
-      board.position(game.fen());
-      hlLast();
+
+      // Enter exploration mode — board updates but fullHistory / PGN stay unchanged
+      explorationFen = tmpGame.fen();
+      board.position(explorationFen);
+      hlSq(mv.from, mv.to, 'rgba(244,193,67,.55)');
+
+      // Update status bar to reflect exploration position
+      const exploTurn = tmpGame.turn() === 'w' ? 'White' : 'Black';
+      $stmn.text(exploTurn + ' to move');
+      $stsb.text('Exploring — press ← to go back');
+
+      // Run engine on exploration position
       liveAnalyse();
 
-      // Determine sound effect
-      const isCapture = mv.captured ? true : false;
+      // Sounds
+      const isCapture = mv.captured;
       const isCastle = mv.flags && (mv.flags.includes('k') || mv.flags.includes('q'));
-      const isPromote = mv.promotion ? true : false;
-      const isCheck = game.in_check();
-      const isGameEnd = game.game_over();
+      const isPromote = mv.promotion;
+      const isCheck = tmpGame.in_check();
+      const isGameEnd = tmpGame.game_over();
 
       if (isGameEnd) playSound('gameend');
       else if (isCapture) playSound('capture');
@@ -1907,6 +2099,7 @@
 
     // ── MOVE NAVIGATION ───────────────────────────────────────────────
     function replayTo(idx) {
+      explorationFen = null; // exit exploration mode when navigating
       idx = Math.max(0, Math.min(idx, fullHistory.length));
       currentIdx = idx;
       game.reset();
@@ -2033,15 +2226,25 @@
         draggable: true,
         position: 'start',
         pieceTheme: 'img/chesspieces/wikipedia/{piece}.png',
-        onDragStart: (src, piece) => !game.game_over() && piece.search(game.turn() === 'w' ? /^w/ : /^b/) === 0,
+        onDragStart: (src, piece) => {
+          // Determine whose turn it is (exploration or game)
+          const activeFen = explorationFen || game.fen();
+          const activeTurn = activeFen.split(' ')[1] || 'w';
+          if (!explorationFen && game.game_over()) return false;
+          return piece.search(activeTurn === 'w' ? /^w/ : /^b/) === 0;
+        },
         onDrop: onDrop,
         onMouseoverSquare: sq => {
-          const mvs = game.moves({ square: sq, verbose: true });
+          const activeFen = explorationFen || game.fen();
+          const activeGame = new Chess(activeFen);
+          const mvs = activeGame.moves({ square: sq, verbose: true });
           if (!mvs.length) return;
           mvs.forEach(m => $(`#myBoard .square-${m.to}`).css('box-shadow', 'inset 0 0 0 4px rgba(129,182,76,.55)'));
         },
         onMouseoutSquare: () => { clearHighlights(); hlLast(); },
-        onSnapEnd: () => board.position(game.fen())
+        onSnapEnd: () => {
+          board.position(explorationFen || game.fen());
+        }
       };
       board = Chessboard('myBoard', config);
 
