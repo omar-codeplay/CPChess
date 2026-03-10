@@ -390,28 +390,31 @@
 
     .stats-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 6px;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 5px;
     }
 
     .stat-cell {
       background: var(--sf);
       border: 1px solid var(--bd);
       border-radius: 6px;
-      padding: 6px;
+      padding: 5px 4px;
       text-align: center;
     }
 
     .stat-val {
       font-family: 'Playfair Display', serif;
-      font-size: 18px;
+      font-size: 16px;
       font-weight: 700;
     }
 
     .stat-lbl {
-      font-size: 9px;
+      font-size: 8px;
       color: var(--txm);
       margin-top: 1px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .c-bl {
@@ -432,6 +435,18 @@
 
     .c-bri {
       color: #1baca6;
+    }
+
+    .c-crit {
+      color: #00bfff;
+    }
+
+    .c-ok {
+      color: #97af8b;
+    }
+
+    .c-fo {
+      color: #8a8078;
     }
 
     .c-bk {
@@ -558,6 +573,7 @@
       width: 100%;
       max-width: 550px;
       aspect-ratio: 1/1;
+      touch-action: none; /* prevent scroll while dragging pieces */
     }
 
     .square-55d63 {
@@ -986,14 +1002,14 @@
         max-height: 200px;
       }
 
-      /* Stats grid: 4 per row on mobile */
+      /* Stats grid: 3 per row on mobile */
       .stats-split {
         gap: 6px;
         padding: 0 10px 10px;
       }
 
       .stats-grid {
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: repeat(3, 1fr);
       }
 
       .stat-val {
@@ -1026,7 +1042,7 @@
       }
 
       .stats-grid {
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: repeat(3, 1fr);
       }
 
       .acc-n {
@@ -1145,75 +1161,33 @@
           <div class="stats-col">
             <h4>White (<span id="acc-w2">0</span>%)</h4>
             <div class="stats-grid">
-              <div class="stat-cell">
-                <div class="stat-val c-bk" id="w-bk">0</div>
-                <div class="stat-lbl">Book</div>
-              </div>
-              <div class="stat-cell">
-                <div class="stat-val c-bri" id="w-bri">0</div>
-                <div class="stat-lbl">!!</div>
-              </div>
-              <div class="stat-cell">
-                <div class="stat-val c-be" id="w-be">0</div>
-                <div class="stat-lbl">★</div>
-              </div>
-              <div class="stat-cell">
-                <div class="stat-val c-ex" id="w-ex">0</div>
-                <div class="stat-lbl">Excl</div>
-              </div>
-              <div class="stat-cell">
-                <div class="stat-val c-in" id="w-in">0</div>
-                <div class="stat-lbl">?!</div>
-              </div>
-              <div class="stat-cell">
-                <div class="stat-val c-mi" id="w-mi">0</div>
-                <div class="stat-lbl">?</div>
-              </div>
-              <div class="stat-cell">
-                <div class="stat-val c-ms" id="w-ms">0</div>
-                <div class="stat-lbl">Miss</div>
-              </div>
-              <div class="stat-cell">
-                <div class="stat-val c-bl" id="w-bl">0</div>
-                <div class="stat-lbl">??</div>
-              </div>
+              <div class="stat-cell"><div class="stat-val c-bk" id="w-bk">0</div><div class="stat-lbl">📖 Book</div></div>
+              <div class="stat-cell"><div class="stat-val c-bri" id="w-bri">0</div><div class="stat-lbl">!! Brilliant</div></div>
+              <div class="stat-cell"><div class="stat-val c-crit" id="w-crit">0</div><div class="stat-lbl">⚡ Great</div></div>
+              <div class="stat-cell"><div class="stat-val c-be" id="w-be">0</div><div class="stat-lbl">★ Best</div></div>
+              <div class="stat-cell"><div class="stat-val c-ex" id="w-ex">0</div><div class="stat-lbl">! Excellent</div></div>
+              <div class="stat-cell"><div class="stat-val c-ok" id="w-ok">0</div><div class="stat-lbl">Good</div></div>
+              <div class="stat-cell"><div class="stat-val c-fo" id="w-fo">0</div><div class="stat-lbl">→ Forced</div></div>
+              <div class="stat-cell"><div class="stat-val c-in" id="w-in">0</div><div class="stat-lbl">?! Inaccur.</div></div>
+              <div class="stat-cell"><div class="stat-val c-mi" id="w-mi">0</div><div class="stat-lbl">? Mistake</div></div>
+              <div class="stat-cell"><div class="stat-val c-ms" id="w-ms">0</div><div class="stat-lbl">Miss</div></div>
+              <div class="stat-cell"><div class="stat-val c-bl" id="w-bl">0</div><div class="stat-lbl">?? Blunder</div></div>
             </div>
           </div>
           <div class="stats-col">
             <h4>Black (<span id="acc-b2">0</span>%)</h4>
             <div class="stats-grid">
-              <div class="stat-cell">
-                <div class="stat-val c-bk" id="b-bk">0</div>
-                <div class="stat-lbl">Book</div>
-              </div>
-              <div class="stat-cell">
-                <div class="stat-val c-bri" id="b-bri">0</div>
-                <div class="stat-lbl">!!</div>
-              </div>
-              <div class="stat-cell">
-                <div class="stat-val c-be" id="b-be">0</div>
-                <div class="stat-lbl">★</div>
-              </div>
-              <div class="stat-cell">
-                <div class="stat-val c-ex" id="b-ex">0</div>
-                <div class="stat-lbl">Excl</div>
-              </div>
-              <div class="stat-cell">
-                <div class="stat-val c-in" id="b-in">0</div>
-                <div class="stat-lbl">?!</div>
-              </div>
-              <div class="stat-cell">
-                <div class="stat-val c-mi" id="b-mi">0</div>
-                <div class="stat-lbl">?</div>
-              </div>
-              <div class="stat-cell">
-                <div class="stat-val c-ms" id="b-ms">0</div>
-                <div class="stat-lbl">Miss</div>
-              </div>
-              <div class="stat-cell">
-                <div class="stat-val c-bl" id="b-bl">0</div>
-                <div class="stat-lbl">??</div>
-              </div>
+              <div class="stat-cell"><div class="stat-val c-bk" id="b-bk">0</div><div class="stat-lbl">📖 Book</div></div>
+              <div class="stat-cell"><div class="stat-val c-bri" id="b-bri">0</div><div class="stat-lbl">!! Brilliant</div></div>
+              <div class="stat-cell"><div class="stat-val c-crit" id="b-crit">0</div><div class="stat-lbl">⚡ Great</div></div>
+              <div class="stat-cell"><div class="stat-val c-be" id="b-be">0</div><div class="stat-lbl">★ Best</div></div>
+              <div class="stat-cell"><div class="stat-val c-ex" id="b-ex">0</div><div class="stat-lbl">! Excellent</div></div>
+              <div class="stat-cell"><div class="stat-val c-ok" id="b-ok">0</div><div class="stat-lbl">Good</div></div>
+              <div class="stat-cell"><div class="stat-val c-fo" id="b-fo">0</div><div class="stat-lbl">→ Forced</div></div>
+              <div class="stat-cell"><div class="stat-val c-in" id="b-in">0</div><div class="stat-lbl">?! Inaccur.</div></div>
+              <div class="stat-cell"><div class="stat-val c-mi" id="b-mi">0</div><div class="stat-lbl">? Mistake</div></div>
+              <div class="stat-cell"><div class="stat-val c-ms" id="b-ms">0</div><div class="stat-lbl">Miss</div></div>
+              <div class="stat-cell"><div class="stat-val c-bl" id="b-bl">0</div><div class="stat-lbl">?? Blunder</div></div>
             </div>
           </div>
         </div>
@@ -1256,8 +1230,12 @@
         <button class="btn btn-load" id="btn-load">Load</button>
         <button class="btn btn-az" id="btn-az">⚡ Analyze</button>
       </div>
-      <div id="az-wrap" style="display:none;padding:2px 0 0">
-        <div style="background:var(--sf3);border-radius:3px;height:3px;overflow:hidden">
+      <div id="az-wrap" style="display:none;padding:4px 0 0">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
+          <span id="az-pct-txt" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ac);min-width:36px">0%</span>
+          <span id="az-pos-txt" style="font-size:10px;color:var(--txd);flex:1"></span>
+        </div>
+        <div style="background:var(--sf3);border-radius:3px;height:4px;overflow:hidden">
           <div id="az-pbf" style="height:100%;background:var(--ac);width:0%;transition:width .15s"></div>
         </div>
       </div>
@@ -1615,6 +1593,22 @@
     function considerBrilliant(prevEv, secondEv, currEv, isWhite, prevChess, currChess, moveObj) {
       if (!isMoveCriticalCandidate(prevEv, secondEv, currEv, isWhite, prevChess, moveObj)) return false;
       if (!moveObj || moveObj.promotion) return false;
+
+      // ── SACRIFICE REQUIREMENT ─────────────────────────────────────
+      // Brilliant MUST involve a sacrifice: either the moved piece ends
+      // up hanging (piece sac) or we capture a defended piece (exchange sac).
+      const opColor = moveObj.color === 'w' ? 'b' : 'w';
+      const movedPieceAfter = { type: moveObj.piece, color: moveObj.color, square: moveObj.to };
+      const movedPieceHanging = !isPieceSafe(currChess, movedPieceAfter);
+      let capturedWasDefended = false;
+      if (moveObj.captured) {
+        // If the captured piece was safe (defended) in the previous position, it's a real exchange
+        capturedWasDefended = isPieceSafe(prevChess, { type: moveObj.captured, color: opColor, square: moveObj.to });
+      }
+      // No sacrifice at all → not brilliant
+      if (!movedPieceHanging && !capturedWasDefended) return false;
+      // ─────────────────────────────────────────────────────────────
+
       const ourColor = moveObj.color;
       const prevUnsafe = getUnsafePieces(prevChess, ourColor, null);
       const currUnsafe = getUnsafePieces(currChess, ourColor, moveObj.captured);
@@ -1749,6 +1743,7 @@
           cb(r1, r2);
         } else {
           renderLiveEngine();
+          $('#edpt').text('depth ' + (liveMPV[1]?.depth || ANALYSIS_DEPTH) + ' · ready');
         }
       }
     }
@@ -1764,7 +1759,6 @@
       liveAnalyseTimer = setTimeout(() => {
         if (!engineReady || !engineOn || liveBestCb || isAnalyzing) return;
         const fen = explorationFen || game.fen();
-        // Check opening book first
         const bookMove = getOpeningMove(fen);
         liveMPV = {};
         liveFen = fen;
@@ -1772,7 +1766,7 @@
         sfPost('setoption name MultiPV value ' + ANALYSIS_MULTIPV);
         sfPost('position fen ' + liveFen);
         sfPost('go depth ' + ANALYSIS_DEPTH);
-        // If book move exists, show it immediately as hint
+        $('#edpt').text('analyzing…');
         if (bookMove) {
           const bookSAN = uciToSAN(bookMove, fen);
           $('#bsan').text('📖 ' + bookSAN);
@@ -1912,7 +1906,11 @@
       // Evaluate each position (MultiPV 2) — we only need best and second for classification
       const evals = [];
       for (let i = 0; i < positions.length; i++) {
-        document.getElementById('az-pbf').style.width = Math.round((i / positions.length) * 100) + '%';
+        const pct = Math.round((i / positions.length) * 100);
+        document.getElementById('az-pbf').style.width = pct + '%';
+        document.getElementById('az-pct-txt').textContent = pct + '%';
+        const moveNum = i === 0 ? 'Start' : `Move ${i}/${positions.length - 1}`;
+        document.getElementById('az-pos-txt').textContent = moveNum;
         const { best, second } = await evalPosition(positions[i].fen, ANALYSIS_DEPTH);
         evals.push({
           ev: best ? best.ev : makeEval('cp', 0),
@@ -1922,6 +1920,8 @@
         await new Promise(r => setTimeout(r, 4));
       }
       document.getElementById('az-pbf').style.width = '100%';
+      document.getElementById('az-pct-txt').textContent = '100%';
+      document.getElementById('az-pos-txt').textContent = 'Classifying…';
 
       // Build analysisData
       analysisData = positions.map((p, i) => ({
@@ -1949,11 +1949,20 @@
       updateStatsUI();
       showBadge(currentIdx);
 
+      // ── Force engine back to live mode ─────────────────────────────
+      liveBestCb = null;         // clear any lingering callback
+      liveMPV = {};
       isAnalyzing = false;
+      sfPost('setoption name MultiPV value ' + ANALYSIS_MULTIPV);
+
       btn.textContent = '✓ Done'; btn.disabled = false;
       document.getElementById('az-wrap').style.display = 'none';
+      document.getElementById('az-pct-txt').textContent = '0%';
+      document.getElementById('az-pos-txt').textContent = '';
       setTimeout(() => { btn.textContent = '⚡ Analyze'; }, 2500);
-      liveAnalyse();
+
+      // Small delay then restart live analysis
+      setTimeout(() => liveAnalyse(), 200);
     }
 
     // ── MOVE LIST DISPLAY ─────────────────────────────────────────────
@@ -1985,15 +1994,23 @@
     // ── STATS PANEL ───────────────────────────────────────────────────
     // Map full classification names to HTML stat cell short codes
     const STAT_ID = {
-      brilliant: 'bri', critical: 'bri', best: 'be', excellent: 'ex', okay: 'ex',
-      inaccuracy: 'in', mistake: 'mi', blunder: 'bl', theory: 'bk', forced: 'fo'
+      brilliant:  'bri',
+      critical:   'crit',
+      best:       'be',
+      excellent:  'ex',
+      okay:       'ok',
+      inaccuracy: 'in',
+      mistake:    'mi',
+      blunder:    'bl',
+      theory:     'bk',
+      forced:     'fo'
     };
 
     function updateStatsUI() {
       let wAcc = 0, bAcc = 0, wCt = 0, bCt = 0;
       const stats = {
-        w: { bri: 0, be: 0, ex: 0, in: 0, mi: 0, ms: 0, bl: 0, bk: 0, fo: 0 },
-        b: { bri: 0, be: 0, ex: 0, in: 0, mi: 0, ms: 0, bl: 0, bk: 0, fo: 0 }
+        w: { bri: 0, crit: 0, be: 0, ex: 0, ok: 0, fo: 0, in: 0, mi: 0, ms: 0, bl: 0, bk: 0 },
+        b: { bri: 0, crit: 0, be: 0, ex: 0, ok: 0, fo: 0, in: 0, mi: 0, ms: 0, bl: 0, bk: 0 }
       };
 
       for (let i = 1; i < analysisData.length; i++) {
@@ -2247,6 +2264,14 @@
         }
       };
       board = Chessboard('myBoard', config);
+
+      // Prevent page scroll when touching the board on mobile
+      document.getElementById('myBoard').addEventListener('touchmove', function(e) {
+        e.preventDefault();
+      }, { passive: false });
+      document.getElementById('myBoard').addEventListener('touchstart', function(e) {
+        e.preventDefault();
+      }, { passive: false });
 
       loadOpenings();
       initEngine();
