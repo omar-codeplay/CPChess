@@ -1318,7 +1318,9 @@
     let fullHistory = [];
     let currentIdx = 0;
     let openingsDB = {};     // fen-pieces → opening name
-    let explorationFen = null; // temp FEN when user drags piece (doesn't affect game record)
+    let explorationFen = null;   // current FEN of exploration chain
+    let explorationGame = null;  // Chess() instance tracking exploration moves
+    let explorationHistory = []; // moves played during exploration
     let liveAnalyseTimer = null; // debounce timer for engine
     let pendingLiveFen = null;   // queued FEN waiting for engine to finish
     let engineBusy = false;      // true while engine is computing live analysis
@@ -1924,23 +1926,39 @@
     async function startFullAnalysis() {
       if (isAnalyzing) return;
       if (!engineReady) { alert('Engine not ready — make sure stockfish-18-lite-single.js is local.'); return; }
-      if (fullHistory.length === 0) { alert('Load a game first.'); return; }
 
+      // Exit exploration mode, analyze the real game
+      explorationFen = null;
+      explorationGame = null;
+      explorationHistory = [];
+
+      // Allow analysis even with 0 moves (single position) or manually played moves
+      // If no history, we'll just evaluate the starting/current position
       isAnalyzing = true;
       const btn = document.getElementById('btn-az');
       btn.textContent = '⏳ Analyzing…'; btn.disabled = true;
       document.getElementById('az-wrap').style.display = '';
       sfPost('stop');
-      sfPost('ucinewgame'); // ← clear hash table for consistent results
-      await new Promise(r => setTimeout(r, 80)); // brief pause for ucinewgame to apply
+      sfPost('ucinewgame');
+      await new Promise(r => setTimeout(r, 80));
 
-      // Build FEN sequence
+      // Rebuild full game history from scratch using chess.js
+      // This works whether moves came from PGN load or manual play
       const positions = [];
       const tmp = new Chess();
       positions.push({ fen: tmp.fen(), moveObj: null, legalCount: tmp.moves().length });
       for (const mv of fullHistory) {
         tmp.move(mv);
         positions.push({ fen: tmp.fen(), moveObj: mv, legalCount: tmp.moves().length });
+      }
+
+      if (positions.length <= 1) {
+        // Only starting position — just analyze it live
+        isAnalyzing = false;
+        btn.textContent = '⚡ Analyze';
+        document.getElementById('az-wrap').style.display = 'none';
+        liveAnalyse();
+        return;
       }
 
       // Evaluate each position (MultiPV 2) — we only need best and second for classification
@@ -2108,39 +2126,91 @@
 
     function onDrop(src, tgt) {
       clearHighlights();
-      // Build a temporary game from the current board position only
-      const tmpGame = new Chess(game.fen());
-      const mv = tmpGame.move({ from: src, to: tgt, promotion: 'q' });
+
+      // Base position: if already exploring, chain on top; else start from game
+      if (!explorationGame) {
+        explorationGame = new Chess(game.fen());
+        explorationHistory = [];
+      }
+
+      const preFen = explorationGame.fen(); // FEN before this move (for classification)
+      const mv = explorationGame.move({ from: src, to: tgt, promotion: 'q' });
       if (!mv) return 'snapback';
 
-      // Enter exploration mode — board updates but fullHistory / PGN stay unchanged
-      explorationFen = tmpGame.fen();
+      explorationFen = explorationGame.fen();
+      explorationHistory.push(mv);
+
       board.position(explorationFen);
       hlSq(mv.from, mv.to, 'rgba(244,193,67,.55)');
 
-      // Update status bar to reflect exploration position
-      const exploTurn = tmpGame.turn() === 'w' ? 'White' : 'Black';
+      const exploTurn = explorationGame.turn() === 'w' ? 'White' : 'Black';
       $stmn.text(exploTurn + ' to move');
       $stsb.text('Exploring — press ← to go back');
 
-      // Run engine on exploration position
-      liveAnalyse();
-
       // Sounds
-      const isCapture = mv.captured;
-      const isCastle = mv.flags && (mv.flags.includes('k') || mv.flags.includes('q'));
-      const isPromote = mv.promotion;
-      const isCheck = tmpGame.in_check();
-      const isGameEnd = tmpGame.game_over();
-
-      if (isGameEnd) playSound('gameend');
-      else if (isCapture) playSound('capture');
-      else if (isCastle) playSound('castle');
-      else if (isPromote) playSound('promote');
-      else if (isCheck) playSound('check');
+      if (explorationGame.game_over()) playSound('gameend');
+      else if (mv.captured) playSound('capture');
+      else if (mv.flags && (mv.flags.includes('k') || mv.flags.includes('q'))) playSound('castle');
+      else if (mv.promotion) playSound('promote');
+      else if (explorationGame.in_check()) playSound('check');
       else playSound('move');
 
+      // Quick instant classification of this exploration move
+      classifyExplorationMove(preFen, explorationFen, mv, explorationHistory.length);
+
+      // Engine analyzes new position
+      liveAnalyse();
       return;
+    }
+
+    // ── INSTANT CLASSIFY EXPLORATION MOVE ────────────────────────────
+    async function classifyExplorationMove(preFen, postFen, moveObj, moveNum) {
+      if (!engineReady || isAnalyzing) return;
+      try {
+        // Evaluate position BEFORE the move (need best & second for classification)
+        const { best: prevBest, second: prevSecond } = await evalPosition(preFen, Math.min(ANALYSIS_DEPTH, 14));
+        // Evaluate position AFTER the move
+        const { best: currBest } = await evalPosition(postFen, Math.min(ANALYSIS_DEPTH, 14));
+
+        if (!prevBest || !currBest) return;
+
+        const prevData = {
+          fen: preFen,
+          eval: prevBest.ev,
+          secondEval: prevSecond ? prevSecond.ev : null,
+          bestUCI: (prevBest.pv || '').split(' ')[0],
+          legalCount: new Chess(preFen).moves().length
+        };
+        const currData = {
+          fen: postFen,
+          eval: currBest.ev,
+          moveObj,
+          san: moveObj.san
+        };
+
+        // moveIndex: use fullHistory length + exploration step to determine color
+        const moveIndex = fullHistory.length + moveNum;
+        const cls = classifyMove(prevData, currData, moveIndex);
+        const acc = getMoveAccuracy(prevBest.ev, currBest.ev, moveIndex % 2 === 1);
+
+        // Show badge on board
+        const meta = CLASSIF[cls] || {};
+        if (meta.img) {
+          $('.sq-badge').remove();
+          const $sq = $(`#myBoard .square-${moveObj.to}`);
+          if ($sq.length) {
+            $sq.append(`<div class="sq-badge"><img src="${meta.img}" alt="${cls}"></div>`);
+          }
+        }
+
+        // Show in status bar
+        const sym = meta.symbol || '';
+        const label = meta.label || cls;
+        $stsb.text(`${label}${sym ? ' ' + sym : ''} · ${acc.toFixed(1)}% accuracy`);
+
+        // Restart live analysis (was paused for eval)
+        liveAnalyse();
+      } catch(e) { liveAnalyse(); }
     }
 
     function updateUI() {
@@ -2158,7 +2228,9 @@
 
     // ── MOVE NAVIGATION ───────────────────────────────────────────────
     function replayTo(idx) {
-      explorationFen = null; // exit exploration mode when navigating
+      explorationFen = null;     // exit exploration mode when navigating
+      explorationGame = null;
+      explorationHistory = [];
       idx = Math.max(0, Math.min(idx, fullHistory.length));
       currentIdx = idx;
       game.reset();
@@ -2227,6 +2299,9 @@
     }
 
     function applyFEN(fen) {
+      explorationFen = null;
+      explorationGame = null;
+      explorationHistory = [];
       game.load(fen);
       fullHistory = [];
       currentIdx = 0;
@@ -2238,6 +2313,9 @@
     }
 
     function applyPGN(pgn, parsed) {
+      explorationFen = null;
+      explorationGame = null;
+      explorationHistory = [];
       game = parsed || new Chess();
       if (!parsed) game.load_pgn(pgn, { sloppy: true });
       fullHistory = game.history({ verbose: true });
@@ -2286,23 +2364,22 @@
         position: 'start',
         pieceTheme: 'img/chesspieces/wikipedia/{piece}.png',
         onDragStart: (src, piece) => {
-          // Determine whose turn it is (exploration or game)
-          const activeFen = explorationFen || game.fen();
-          const activeTurn = activeFen.split(' ')[1] || 'w';
-          if (!explorationFen && game.game_over()) return false;
+          // Use exploration game if active, else the main game
+          const activeGame = explorationGame || game;
+          if (activeGame.game_over()) return false;
+          const activeTurn = activeGame.turn();
           return piece.search(activeTurn === 'w' ? /^w/ : /^b/) === 0;
         },
         onDrop: onDrop,
         onMouseoverSquare: sq => {
-          const activeFen = explorationFen || game.fen();
-          const activeGame = new Chess(activeFen);
+          const activeGame = explorationGame || game;
           const mvs = activeGame.moves({ square: sq, verbose: true });
           if (!mvs.length) return;
           mvs.forEach(m => $(`#myBoard .square-${m.to}`).css('box-shadow', 'inset 0 0 0 4px rgba(129,182,76,.55)'));
         },
         onMouseoutSquare: () => { clearHighlights(); hlLast(); },
         onSnapEnd: () => {
-          board.position(explorationFen || game.fen());
+          board.position((explorationGame ? explorationGame.fen() : null) || game.fen());
         }
       };
       board = Chessboard('myBoard', config);
